@@ -60,25 +60,37 @@ module sender (
                 end
             end
             SKIP_ZERO: begin
-                if (dec_data_reg[31:28] == 4'b0) begin
-                    dec_data_next = {dec_data_reg[27:0], 4'b0};
-                    send_cnt_next = send_cnt_reg + 1;
-                end else begin
-                    if (i_c_mode == 3) begin
-                        n_state = DHT11;
-                    end else if (i_c_mode == 2) begin
-                        n_state = SR04;
+                //time
+                if ((i_c_mode == 0) || (i_c_mode == 1)) begin
+                    n_state = TIME;
+                    //SR04
+                end else if (i_c_mode == 2) begin
+                    if (send_cnt_reg != 5) begin
+                        if (dec_data_reg[31:28] == 4'b0) begin
+                            dec_data_next = {dec_data_reg[27:0], 4'b0};
+                            send_cnt_next = send_cnt_reg + 1;
+                        end
                     end else begin
-                        n_state = TIME;
+                        n_state = SR04;
+                    end
+                    //DHT11
+                end else begin
+                    if ((send_cnt_reg == 0) && (dec_data_reg[31:28] == 4'b0)) begin
+                        dec_data_next = {dec_data_reg[27:0], 4'b0};
+                        send_cnt_next = send_cnt_reg + 1;
+                    end else begin
+                        n_state = DHT11;
                     end
                 end
             end
             //FOMET => hh:mm:ss:mm
             TIME: begin
                 if (i_sender_ready) begin
-                    if (send_cnt_reg == 11) begin
+                    if (send_cnt_reg == 10) begin
                         n_state = STOP;
-                        send_push_next = 1'b0;
+                        send_data_next = {4'b0, dec_data_reg[31:28]} + ASCII_0;
+                        dec_data_next = {dec_data_reg[27:0], 4'b0};
+                        send_cnt_next = send_cnt_reg + 1;
                     end else if ((send_cnt_reg == 2)||(send_cnt_reg == 5)||(send_cnt_reg == 8))begin
                         send_push_next = 1'b1;
                         send_data_next = ASCII_COLON;
@@ -101,12 +113,12 @@ module sender (
                         n_state = STOP;
                         send_data_next = ASCII_M;
                         send_push_next = 1'b1;
-                    //input DOT
+                        //input DOT
                     end else if (send_cnt_reg == 6) begin
                         send_push_next = 1'b1;
                         send_data_next = ASCII_DOT;
                         send_cnt_next  = send_cnt_reg + 1;
-                    //input data
+                        //input data
                     end else begin
                         send_push_next = 1'b1;
                         send_data_next = {4'b0, dec_data_reg[31:28]} + ASCII_0;
@@ -124,22 +136,27 @@ module sender (
                         n_state = STOP;
                         send_data_next = ASCII_C;
                         send_push_next = 1'b1;
-                    //input DOT
+                        //input DOT
                     end else if ((send_cnt_reg == 2) ||(send_cnt_reg == 9)) begin
                         send_push_next = 1'b1;
                         send_data_next = ASCII_DOT;
                         send_cnt_next  = send_cnt_reg + 1;
-                    //input
+                        //input
                     end else if (send_cnt_reg == 5) begin
                         send_push_next = 1'b1;
                         send_data_next = ASCII_PERSENT;
                         send_cnt_next  = send_cnt_reg + 1;
-                    //input TAB
+                        //input TAB
                     end else if (send_cnt_reg == 6) begin
                         send_push_next = 1'b1;
                         send_data_next = ASCII_TAB;
                         send_cnt_next  = send_cnt_reg + 1;
-                    //input data
+                        //if temp 10digit is 0, skip
+                        if (dec_data_reg[31:28] == 0) begin
+                            dec_data_next  = {dec_data_reg[27:0], 4'b0};
+                            send_cnt_next  = send_cnt_reg + 2;
+                        end
+                        //input data
                     end else begin
                         send_push_next = 1'b1;
                         send_data_next = {4'b0, dec_data_reg[31:28]} + ASCII_0;

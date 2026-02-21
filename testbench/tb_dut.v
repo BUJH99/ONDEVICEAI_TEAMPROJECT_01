@@ -1,4 +1,6 @@
 `timescale 1ns / 1ps
+`define HARDWARE_TEST 1
+//if you want uart sim, change HARDWARE_TEST 0
 
 module tb_dut ();
     //-------------------------sinario---------------------------
@@ -28,9 +30,9 @@ module tb_dut ();
     //      b. "R"                                            run
     //      c. "D"                                            run(up -> down)
     //      d. "U"                                            run(down -> up)
-    //      e. "0" + "R"*2 + "U"*2 + "D" + "0"                time_set(Set digit + Set time number)
-    //      g. "S"                                            check sender
-    //      h. "L"                                            clear
+    //      e. "0" + "R"*2 + "U"*4 + "D"*3 + "0"                time_set(Set digit + Set time number)
+    //      f. "S"                                            check sender
+    //      g. "L"                                            clear
     //----------------------------------------------------------
     //------------------------setting---------------------------
     parameter BTN_Dedounce = (100_000_000 / 1999999);
@@ -67,6 +69,16 @@ module tb_dut ();
 
     //--------------------------
     //--------------------------task----------------------------
+    //--------------------------btn_debounce--------------------
+    task btn_debounce();
+        repeat (BTN_Dedounce) @(posedge clk);
+        btn_u = 0;
+        btn_l = 0;
+        btn_r = 0;
+        btn_d = 0;
+        @(posedge clk);
+    endtask
+    //--------------------------sr04----------------------------
     integer TIME_START = 0, TIME_REG = 0;
     integer SR04_Operation = 80_000;  //80us
     task sr04();
@@ -152,10 +164,11 @@ module tb_dut ();
         end
     endtask
     //----------------------------------------------------------
-
     initial clk = 0;
     always #5 clk = ~clk;
 
+//Hardware--------------------------------------------
+`ifdef HARDWARE_TEST
     initial begin
         rst = 1;
         sw = 0;
@@ -171,59 +184,206 @@ module tb_dut ();
         #50;
         rst = 0;
         repeat (50) @(posedge clk);
-        //Hardware--------------------------------------------
         //----------------------stopwatch---------------------        
+
+        //test start
+        //stopwatch mode
         sw[2] = 1;
-        //test-run up count
+
+        //---------------------a--------------
+        //run (up-count)
         @(posedge clk);
         btn_r = 1;
-        repeat (BTN_Dedounce) @(posedge clk);
-        btn_r = 0;
+        btn_debounce();
+        //time check
+        #(300_000_000);  //3sce
+
+        //---------------------d--------------
+        //run (down-count)
+        btn_d = 1;
+        btn_debounce();
+        //time check
+        #(500_000_000);  //5sce
+
+        //---------------------c--------------
+        //run (up-count)
+        @(posedge clk);
+        btn_r = 1;
+        btn_debounce();
+        //time check
+        #(100_000_000);  //1sce
+
+        //---------------------d-------------
+        //edit mode
+        sw[0] = 1;
+
+        //digit set
+        btn_r = 1;
+        btn_debounce();
+
+        btn_r = 1;
+        btn_debounce();
+
+        //set time ++
+        repeat (2) begin
+            btn_u = 1;
+            btn_debounce();
+        end
+        //set time --
+        repeat (5) begin
+            btn_u = 1;
+            btn_debounce();
+        end
+
+        //---------------------e-------------
+        //stopwatch run
+        sw[0] = 0;
+        btn_r = 1;
+        btn_debounce();
+        //time check
+        #(500_000_000)  //5sce
+
+        //---------------------f------------
+        //claer
+        btn_l = 1;
+        btn_debounce();
 
         //-----------------------watch------------------------
         //mode_chage
         sw[2] = 0;
         btn_r = 1;
-        repeat (BTN_Dedounce) @(posedge clk);
-        sw[2] = 1;
-        btn_r = 0;
+        btn_debounce();
 
-        //test
+        //---------------------a--------------
+        //test start
+        sw[2] = 1;
+        #(500_000_000)  //1sec
+
+        //---------------------b--------------
+        //edit mode
+        sw[0] = 1;
+
+        //digit set
+        btn_r = 1;
+        btn_debounce();
+
+        btn_r = 1;
+        btn_debounce();
+
+        //set time ++
+        repeat (2) begin
+            btn_u = 1;
+            btn_debounce();
+        end
+        //set time --
+        repeat (5) begin
+            btn_u = 1;
+            btn_debounce();
+        end
+        //---------------------c--------------
+        //watch run
+        sw[0] = 0;
+        //time check
+        #(500_000_000)  //5sce
+
+        //---------------------d--------------
+        //claer
+        btn_l = 1;
+        btn_debounce();
 
         //-----------------------sr04-------------------------
         //mode_chage
         sw[2] = 0;
         btn_r = 1;
-        repeat (BTN_Dedounce) @(posedge clk);
+        btn_debounce();
         sw[2] = 1;
-        btn_r = 0;
 
-        //test
+        //test start
+        //---------------------a-------------
         set_Distance = 240;
         sr04();
+
+        //---------------------b-------------
+
         //-----------------------dht11------------------------
         //mode_chage
         sw[2] = 0;
         btn_r = 1;
-        repeat (BTN_Dedounce) @(posedge clk);
+        btn_debounce();
         sw[2] = 1;
-        btn_r = 0;
 
-        //test
+        //test start
+        //---------------------a-------------
         dht11_test_data = {
             8'd36, 8'd8, 8'd79, 8'd99, 8'd222
         };  //sum:222 hum:79.99 tem:36.8
+
+        //---------------------b-------------
         test_dht11();
-        //uart-----------------------------------------------
+        repeat (50) @(posedge clk);
+        $stop;
+    end
+//uart-----------------------------------------------------
+`else
+    initial begin
+        rst = 1;
+        sw = 0;
+        btn_u = 0;
+        btn_l = 0;
+        btn_r = 0;
+        btn_d = 0;
+        rx = 1;
+        set_Distance = 0;
+        dht11_test_data = 0;
+
+
+        //---------------------a-------------
         rx_test_data = ASCII_2;
         uart_sender();
 
+        rx_test_data = ASCII_R;
+        uart_sender();
 
-
-
-        repeat (50) @(posedge clk);
-        $stop;
-
+        rx_test_data = ASCII_2;
+        uart_sender();
+        //---------------------b-------------
+        rx_test_data = ASCII_R;
+        uart_sender();
+        //---------------------c-------------
+        rx_test_data = ASCII_D;
+        uart_sender();
+        //---------------------d-------------
+        rx_test_data = ASCII_U;
+        uart_sender();
+        //---------------------e-------------
+        //0
+        rx_test_data = ASCII_0;
+        uart_sender();
+        //R*2
+        repeat(2) begin
+            rx_test_data = ASCII_R;
+            uart_sender();
+        end
+        //U*2
+        repeat(4) begin
+            rx_test_data = ASCII_U;
+            uart_sender();
+        end
+        //D
+        repeat(3) begin
+            rx_test_data = ASCII_U;
+            uart_sender();
+        end
+        //0
+        rx_test_data = ASCII_0;
+        uart_sender();
+        //---------------------f-------------
+        rx_test_data = ASCII_S;
+        uart_sender();
+        //---------------------g-------------
+        rx_test_data = ASCII_L;
+        uart_sender();
     end
+`endif
 endmodule
 
