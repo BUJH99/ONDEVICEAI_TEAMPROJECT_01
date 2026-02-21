@@ -22,6 +22,9 @@ module fnd_controller (
     wire w_1khz;
     wire [7:0] w_fnd_data;
     wire w_onoff;
+    wire rst;
+
+    assign rst = reset;
 
     //hour
     digit_splitter #(
