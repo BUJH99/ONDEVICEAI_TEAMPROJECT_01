@@ -154,17 +154,19 @@ module AsciiSenderFsm (
                             send_valid <= 1'b1;
                             send_data  <= ASCII_M;
                         end else if (send_cnt < 4'd9) begin
-                            send_valid <= 1'b1;
                             if (send_cnt == 4'd6) begin
                                 send_data <= ASCII_DOT;
+                                send_valid <= 1'b1;
                             end else if (send_cnt < 4'd5) begin
                                 if (dec_data[31:28] == 0) begin
                                     send_data <= ASCII_SPACE;
                                     dec_data  <= {dec_data[27:0], 4'b0};
+                                    send_valid <= 1'b0;
                                 end
                             end else begin
                                 send_data <= {4'b0, dec_data[31:28]} + ASCII_0;
                                 dec_data  <= {dec_data[27:0], 4'b0};
+                                send_valid <= 1'b1;
                             end
                             send_cnt <= send_cnt + 1'b1;
                         end
